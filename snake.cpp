@@ -1,221 +1,219 @@
-#include <bits/stdc++.h>
-#ifdef _WIN32
-#include <conio.h>  // For Windows
-#include <windows.h> // For Windows specific functions
-#else
-#include <ncurses.h> // For Linux
-#include <unistd.h>  // For usleep in Linux
-#endif
+#include <iostream>
+#include <conio.h>
 using namespace std;
 
-#define MAX_LENGTH 1000
+void run();
+void printMap();
+void initMap();
+void move(int dx, int dy);
+void update();
+void changeDirection(char key);
+void clearScreen();
+void generateFood();
 
-// Directions
-const char DIR_UP = 'U';
-const char DIR_DOWN = 'D';
-const char DIR_LEFT = 'L';
-const char DIR_RIGHT = 'R';
+char getMapValue(int value);
 
-int consoleWidth, consoleHeight;
+// Map dimensions
+const int mapwidth = 20;
+const int mapheight = 20;
 
-void initScreen() {
-    #ifdef _WIN32
-    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-    CONSOLE_SCREEN_BUFFER_INFO csbi;
-    GetConsoleScreenBufferInfo(hConsole, &csbi);
-    consoleHeight = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
-    consoleWidth = csbi.srWindow.Right - csbi.srWindow.Left + 1;
-    #else
-    getmaxyx(stdscr, consoleHeight, consoleWidth); // ncurses function to get screen size
-    #endif
+const int size = mapwidth * mapheight;
+
+// The tile values for the map
+int map[size];
+
+// Snake head details
+int headxpos;
+int headypos;
+int direction;
+
+// Amount of food the snake has (How long the body is)
+int food = 4;
+
+// Determine if game is running
+bool running;
+
+int main()
+{
+    run();
+    return 0;
 }
 
-struct Point {
-    int xCoord;
-    int yCoord;
-    Point() {}
-    Point(int x, int y) : xCoord(x), yCoord(y) {}
-};
-
-class Snake {
-    int length;
-    char direction;
-public:
-    Point body[MAX_LENGTH];
-    Snake(int x, int y) : length(1), direction(DIR_RIGHT) {
-        body[0] = Point(x, y);
-    }
-
-    int getLength() {
-        return length;
-    }
-
-    void changeDirection(char newDirection) {
-        if ((newDirection == DIR_UP && direction != DIR_DOWN) ||
-            (newDirection == DIR_DOWN && direction != DIR_UP) ||
-            (newDirection == DIR_LEFT && direction != DIR_RIGHT) ||
-            (newDirection == DIR_RIGHT && direction != DIR_LEFT)) {
-            direction = newDirection;
-        }
-    }
-
-    bool move(Point food) {
-        for (int i = length - 1; i > 0; --i) {
-            body[i] = body[i - 1];
-        }
-
-        switch (direction) {
-            case DIR_UP:    body[0].yCoord--; break;
-            case DIR_DOWN:  body[0].yCoord++; break;
-            case DIR_RIGHT: body[0].xCoord++; break;
-            case DIR_LEFT:  body[0].xCoord--; break;
-        }
-
-        // Snake bites itself
-        for (int i = 1; i < length; ++i) {
-            if (body[0].xCoord == body[i].xCoord && body[0].yCoord == body[i].yCoord) {
-                return false;
-            }
-        }
-
-        // Snake eats food
-        if (food.xCoord == body[0].xCoord && food.yCoord == body[0].yCoord) {
-            body[length++] = Point(body[length - 1].xCoord, body[length - 1].yCoord);
-        }
-
-        return true;
-    }
-};
-
-class Board {
-    Snake *snake;
-    const char SNAKE_BODY = 'O';
-    Point food;
-    const char FOOD = 'o';
-    int score;
-public:
-    Board() : score(0) {
-        spawnFood();
-        snake = new Snake(10, 10);
-    }
-
-    ~Board() {
-        delete snake;
-    }
-
-    int getScore() {
-        return score;
-    }
-
-    void spawnFood() {
-        int x = rand() % consoleWidth;
-        int y = rand() % consoleHeight;
-        food = Point(x, y);
-    }
-
-    void displayCurrentScore() {
-        gotoxy(consoleWidth / 2, 0);
-        printw("Current Score : %d", score);
-    }
-
-    void gotoxy(int x, int y) {
-        #ifdef _WIN32
-        COORD coord;
-        coord.X = x;
-        coord.Y = y;
-        SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
-        #else
-        move(y, x); // ncurses move cursor for Linux (note the order: y, x)
-        #endif
-    }
-
-    void clearScreen() {
-        #ifdef _WIN32
-        system("cls"); // Windows clear screen
-        #else
-        clear(); // ncurses clear screen for Linux
-        #endif
-    }
-
-    void draw() {
-        clearScreen();
-        for (int i = 0; i < snake->getLength(); ++i) {
-            gotoxy(snake->body[i].xCoord, snake->body[i].yCoord);
-            printw("%c", SNAKE_BODY);
-        }
-
-        gotoxy(food.xCoord, food.yCoord);
-        printw("%c", FOOD);
-
-        displayCurrentScore();
-        refresh();
-    }
-
-    bool update() {
-        bool isAlive = snake->move(food);
-        if (!isAlive) return false;
-
-        if (food.xCoord == snake->body[0].xCoord && food.yCoord == snake->body[0].yCoord) {
-            score++;
-            spawnFood();
-        }
-        return true;
-    }
-
-    void getInput() {
-        #ifdef _WIN32
+// Main game function
+void run()
+{
+    // Initialize the map
+    initMap();
+    running = true;
+    while (running) {
+        // If a key is pressed
         if (kbhit()) {
-            int key = getch();
-            if (key == 'w' || key == 'W') snake->changeDirection(DIR_UP);
-            else if (key == 'a' || key == 'A') snake->changeDirection(DIR_LEFT);
-            else if (key == 's' || key == 'S') snake->changeDirection(DIR_DOWN);
-            else if (key == 'd' || key == 'D') snake->changeDirection(DIR_RIGHT);
+            // Change to direction determined by key pressed
+            changeDirection(getch());
         }
-        #else
-        int key = getch();
-        if (key != ERR) {
-            if (key == 'w' || key == 'W' || key == KEY_UP) snake->changeDirection(DIR_UP);
-            else if (key == 'a' || key == 'A' || key == KEY_LEFT) snake->changeDirection(DIR_LEFT);
-            else if (key == 's' || key == 'S' || key == KEY_DOWN) snake->changeDirection(DIR_DOWN);
-            else if (key == 'd' || key == 'D' || key == KEY_RIGHT) snake->changeDirection(DIR_RIGHT);
-        }
-        #endif
-    }
-};
+        // Update the map
+        update();
 
-int main() {
-    #ifndef _WIN32
-    initscr();  // Start ncurses mode
-    cbreak();   // Disable line buffering
-    noecho();   // Don't echo input
-    keypad(stdscr, TRUE); // Enable special keys
-    nodelay(stdscr, TRUE); // Non-blocking input
-    #endif
+        // Clear the screen
+        clearScreen();
 
-    srand(time(0));
-    initScreen();
-    Board *board = new Board();
-    while (board->update()) {
-        board->getInput();
-        board->draw();
-        #ifdef _WIN32
-        Sleep(100); // Sleep for Windows
-        #else
-        usleep(100 * 1000); // usleep for Linux (microseconds)
-        #endif
+        // Print the map
+        printMap();
+
+        // delay 0.4 seconds
+        _sleep(400);
     }
 
-    #ifndef _WIN32
-    printw("Game over\n");
-    printw("Final score is: %d\n", board->getScore());
-    refresh(); // Refresh the screen to show the output
-    endwin(); // End ncurses mode
-    #else
-    cout << "Game over" << endl;
-    cout << "Final score is: " << board->getScore() << endl;
-    #endif
+    // Game Text
+    cout << "\t\tGame Over!" << endl << "\t\tYour score is: " << food;
 
-    delete board;
-    return 0;
+    // Stop console from closing instantly
+    cin.ignore();
+}
+
+// Changes snake direction from input
+void changeDirection(char key) {
+    /*
+      W
+    A + D
+      S
+      1
+    4 + 2
+      3
+    */
+    switch (key) {
+    case 'w':
+        if (direction != 2) direction = 0;
+        break;
+    case 'd':
+        if (direction != 3) direction = 1;
+        break;
+    case 's':
+        if (direction != 4) direction = 2;
+        break;
+    case 'a':
+        if (direction != 5) direction = 3;
+        break;
+    }
+}
+
+// Moves snake head to new location
+void move(int dx, int dy) {
+    // determine new head position
+    int newx = headxpos + dx;
+    int newy = headypos + dy;
+
+    // Check if there is food at location
+    if (map[newx + newy * mapwidth] == -2) {
+        // Increase food value (body length)
+        food++;
+
+        // Generate new food on map
+        generateFood();
+    }
+
+    // Check location is free
+    else if (map[newx + newy * mapwidth] != 0) {
+        running = false;
+    }
+
+    // Move head to new location
+    headxpos = newx;
+    headypos = newy;
+    map[headxpos + headypos * mapwidth] = food + 1;
+
+}
+
+// Clears screen
+void clearScreen() {
+    // Clear the screen
+    system("cls");
+}
+
+// Generates new food on map
+void generateFood() {
+    int x = 0;
+    int y = 0;
+    do {
+        // Generate random x and y values within the map
+        x = rand() % (mapwidth - 2) + 1;
+        y = rand() % (mapheight - 2) + 1;
+
+        // If location is not free try again
+    } while (map[x + y * mapwidth] != 0);
+
+    // Place new food
+    map[x + y * mapwidth] = -2;
+}
+
+// Updates the map
+void update() {
+    // Move in direction indicated
+    switch (direction) {
+    case 0: move(-1, 0);
+        break;
+    case 1: move(0, 1);
+        break;
+    case 2: move(1, 0);
+        break;
+    case 3: move(0, -1);
+        break;
+    }
+
+    // Reduce snake values on map by 1
+    for (int i = 0; i < size; i++) {
+        if (map[i] > 0) map[i]--;
+    }
+}
+
+// Initializes map
+void initMap()
+{
+    // Places the initual head location in middle of map
+    headxpos = mapwidth / 2;
+    headypos = mapheight / 2;
+    map[headxpos + headypos * mapwidth] = 1;
+
+    // Places top and bottom walls 
+    for (int x = 0; x < mapwidth; ++x) {
+        map[x] = -1;
+        map[x + (mapheight - 1) * mapwidth] = -1;
+    }
+
+    // Places left and right walls
+    for (int y = 0; y < mapheight; y++) {
+        map[0 + y * mapwidth] = -1;
+        map[(mapwidth - 1) + y * mapwidth] = -1;
+    }
+
+    // Generates first food
+    generateFood();
+}
+
+// Prints the map to console
+void printMap()
+{
+    for (int x = 0; x < mapwidth; ++x) {
+        for (int y = 0; y < mapheight; ++y) {
+            // Prints the value at current x,y location
+            cout << getMapValue(map[x + y * mapwidth]);
+        }
+        // Ends the line for next x value
+        cout << endl;
+    }
+}
+
+// Returns graphical character for display from map value
+char getMapValue(int value)
+{
+    // Returns a part of snake body
+    if (value > 0) return 'o';
+
+    switch (value) {
+        // Return wall
+    case -1: return 'X';
+        // Return food
+    case -2: return 'O';
+    }
 }
 
